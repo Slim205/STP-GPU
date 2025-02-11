@@ -40,7 +40,7 @@ Our final model is finetuned from DeepSeek-Prover-V1.5-SFT with this dataset for
 
 Our experiments are mostly run on TPU VMs. You can find a quick overview of TPU VMs [here](https://github.com/stanford-crfm/levanter/blob/main/docs/Getting-Started-TPU-VM.md), and please follow the instructions to [setup Google Cloud](https://github.com/stanford-crfm/levanter/blob/main/docs/Getting-Started-TPU-VM.md#google-cloud-setup).
 
-### 3.1 Request a TPU VM
+### 3.1. Request a TPU VM
 Pease first modify the environment variables in the last few lines of `levanter/infra/helpers/setup-tpu-vm.sh` to provide the path to your [Google Cloud buckets](https://cloud.google.com/storage/docs/creating-buckets#console), WandB access token, and Hugging Face access token.
 
 Use the following commands to request an instance with 256 TPU-v4 cores (please replace `STP-train` and `us-central2-b` with your TPU name and zone):
@@ -50,7 +50,7 @@ eval $(ssh-agent -s) bash infra/spin-up-vm.sh STP-train -z us-central2-b -t v4-2
 ```
 This will automatically install the dependencies specified in [this setup file](https://github.com/kfdong/STP/blob/main/levanter/infra/helpers/setup-tpu-vm.sh), such as Levanter, vLLM, Lean4, and mathlib4, and sync the environment variables to all TPU nodes.
 
-### 3.2 Reproduce Test Results
+### 3.2. Reproduce Test Results
 Use the following commands to connect to the TPU VM, and then generate and test proofs on miniF2F-test and ProofNet-test.
 
 ```sh
@@ -63,7 +63,7 @@ python summary.py --log_path $STORAGE/STP/benchmark_results/generated_proofs_tes
 python summary.py --log_path $STORAGE/STP/benchmark_results/generated_proofs_tests.jsonl.gz --split proofnet --max_iter 3200
 ```
 
-### 3.3 Prepare Datasets
+### 3.3. Prepare Datasets
 
 On the TPU VM, use the following commands to prepare SFT datasets:
 ```sh
@@ -74,7 +74,7 @@ python prepare_datasets.py
 ```
 This script will generate three .json files in your Google Cloud storage bucket (`$STORAGE/data/SFT/`), corresponding to the SFT dataset, mathlib4 eval examples, and mathlib4 training examples, respectively.
 
-### 3.4 STP
+### 3.4. STP
 
 The Self-play Theorem Prover (STP) involves three training stages:
 
@@ -99,9 +99,14 @@ bash run_RL_train.sh
 ```
 In our experiments, we alternate between Stage 2 and Stage 3 to stabilize the training. That is, we periodically restart self-play training (Stage 2) with the re-trained model checkpoint (Stage 3).
 
-### 3.5 GPU Support
+### 3.5. GPU Support
 
 This codebase does not directly support GPUs. However, both the training and inference frameworks (Levanter and vLLM) support GPUs. Therefore, the required changes should be somewhat manageable. Below is a (possibly incomplete) list of platform-specific code changes needed:
 
 1. We use ray to manage the TPU and CPU resources on multiple nodes. Please modify the function `init_ray_cluster` in `RL/utils/model_utils.py` to start the ray cluster.
 2. Please modify the `execute_on_all_workers` function in `RL/utils/gcloud_utils.py` to execute bash commands on all nodes. This function is used to (a) copy model checkpoints to local disk, and (b) cleanup the CPU resources used by Lean verifier.
+
+## License
+-  **Code:** This project is licensed under the MIT License. However, the code in the `levanter/` directory is licensed under the Apache License 2.0.
+
+- **Model:** The model is derived from DeepSeek and is licensed under the [DeepSeek License Agreement](https://github.com/deepseek-ai/DeepSeek-Prover-V1.5/blob/main/LICENSE-MODEL). The use of the model and its derivatives must comply with the use-based restrictions outlined in the [DeepSeek License Agreement](https://github.com/deepseek-ai/DeepSeek-Prover-V1.5/blob/main/LICENSE-MODEL).
