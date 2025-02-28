@@ -92,37 +92,6 @@ retry sudo apt-get -qq update
 retry sudo apt-get -qq install -y python3.10-full python3.10-dev git
 retry sudo apt-get install -y libopenblas-base libopenmpi-dev libomp-dev sysstat task-spooler
 
-VENV=~/venv310
-# if the venv doesn't exist, make it
-if [ ! -d "$VENV" ]; then
-    echo "Creating virtualenv at $VENV"
-    python3.10 -m venv $VENV
-fi
-
-source $VENV/bin/activate
-
-pip install -U pip
-pip install -U wheel
-
-retry pip install -U optax==0.2.2 equinox==0.11.7 "jax[tpu]==0.4.26" -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
-
-# clone levanter
-git clone $REPO levanter
-echo $VENV > levanter/infra/venv_path.txt
-
-cd levanter
-
-# checkout the branch we want
-
-echo "Checking out branch $BRANCH"
-
-git checkout $BRANCH
-
-# install levanter
-
-pip install -e .
-
-
 # install inference venv
 VENV=~/venv_vllm
 # if the venv doesn't exist, make it
@@ -144,17 +113,22 @@ pip install func_timeout wandb pgzip ujson packaging aiohttp datasets
 pip install google-cloud-storage==2.14.0 google-api-core==1.34.1 grpcio==1.65.5
 echo "Done."
 
+VENV=~/venv310
+# if the venv doesn't exist, make it
+if [ ! -d "$VENV" ]; then
+    echo "Creating virtualenv at $VENV"
+    python3.10 -m venv $VENV
+fi
+
 cd ~
 git clone git@github.com:kfdong/STP.git
 cd ~/STP
 git pull
 source ~/venv310/bin/activate
-pip install torch --index-url https://download.pytorch.org/whl/cpu
+pip install torch==2.4.0 --index-url https://download.pytorch.org/whl/cpu
+pip install -r venv310.txt -f https://storage.googleapis.com/libtpu-releases/index.html
 cd levanter
 pip install -e .
-pip install wandb==0.17.5 pgzip
-
-rm -rf ~/levanter
 
 source ~/venv_vllm/bin/activate
 
