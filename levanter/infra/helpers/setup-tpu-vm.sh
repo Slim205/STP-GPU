@@ -121,7 +121,7 @@ if [ ! -d "$VENV" ]; then
 fi
 
 cd ~
-git clone git@github.com:kfdong/STP.git
+git clone https://github.com/kfdong/STP.git
 cd ~/STP
 git pull
 source ~/venv310/bin/activate
