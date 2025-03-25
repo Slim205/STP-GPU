@@ -20,8 +20,8 @@ from utils.RL_utils import update_succ_lemmas, REPO_DIR, train_model, BATCH_SIZE
 from utils.gcloud_utils import read_file, write_data, execute_on_all_workers, path_exists
 
 def compute_weight(proof, verify_time = 0):
-    # return np.exp(-0.001 * len(proof) - 0.01 * verify_time)
-    return np.exp(-0.001 * len(proof))
+    return np.exp(-0.001 * len(proof) - 0.01 * verify_time)
+    # return np.exp(-0.001 * len(proof))
 
 def format_data(header, statement, proof):
     if header is not None:
