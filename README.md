@@ -11,6 +11,9 @@ This is an official implementation of the Self-play Theorem Prover as described 
   year={2025}
 }
 ```
+## News
+- [2025/03] We scaled STP’s training compute by 2x, and achieved new SoTA for whole-proof generation methods on miniF2F, ProofNet, and LeanWorkbook!
+- [2025/02] Code, data, and models of STP are released.
 
 ## 1. Evaluation Results
 
@@ -22,14 +25,14 @@ The table below compares the pass@3200 performance of STP (our model) and DeepSe
 |--------|------------------|------------------|
 | **DeepSeek-Prover-V1.5-SFT** | 53.3% ± 0.5% | 21.0% ± 0.9% |
 | **DeepSeek-Prover-V1.5-RL** | 54.9% ± 0.7% | 22.0% ± 0.5% |
-| **STP** | **61.7% ± 0.6%** | **23.1% ± 0.5%** |
+| **STP** | **65.0% ± 0.5%** | **23.9% ± 0.6%** |
 
 </div>
 
 ## 2. Model and Dataset
-Our final model can be downloaded [here](https://huggingface.co/kfdong/STP_model_Lean).
+Our final model can be downloaded [here](https://huggingface.co/kfdong/STP_model_Lean_0320).
 
-We also release the dataset [here](https://huggingface.co/datasets/kfdong/STP_Lean), which contains:
+We also release the dataset [here](https://huggingface.co/datasets/kfdong/STP_Lean_0320), which contains:
 - Extracted examples from mathlib4,
 - Generated correct proofs of statements in LeanWorkbook, 
 - Generated correct proofs of conjectures proposed by our model during self-play training. 
@@ -58,7 +61,7 @@ gcloud compute tpus tpu-vm ssh STP-train --zone us-central2-b --worker=0
 source ~/venv_vllm/bin/activate
 cd ~/STP/RL
 source .bash_alias.sh
-bash run_generation_and_test.sh kfdong/STP_model_Lean $STORAGE/STP/benchmark_results
+bash run_generation_and_test.sh kfdong/STP_model_Lean_0320 $STORAGE/STP/benchmark_results
 python summary.py --log_path $STORAGE/STP/benchmark_results/generated_proofs_tests.jsonl.gz --split miniF2F --max_iter 3200
 python summary.py --log_path $STORAGE/STP/benchmark_results/generated_proofs_tests.jsonl.gz --split proofnet --max_iter 3200
 ```
