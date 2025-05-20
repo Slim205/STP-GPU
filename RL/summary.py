@@ -77,8 +77,9 @@ def load_succ_rate(file_paths, include_proofnet = True, include_miniF2F = True):
     return ret
 
 def get_metric(file_path, budgets = [128], split = 'miniF2F', max_iter = 3200):
+    print(file_path)
     generated_proofs = read_file(file_path)
-    
+    print(generated_proofs)
     theorem_mapping = {}
     for test_info in generated_proofs:
         key = test_info['statement']

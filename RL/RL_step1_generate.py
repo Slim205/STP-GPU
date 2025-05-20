@@ -11,7 +11,7 @@ import gc
 from collections import defaultdict
 from copy import deepcopy
 from utils.gcloud_utils import read_file, write_data, path_exists, execute_on_all_workers
-from utils.model_utils import init_ray_cluster, CHECKPOINT_TMP_DIR
+from utils.model_utils import init_ray_cluster
 from utils.RL_utils import collect_trajectories, collect_conjecture, load_ds_from_config
 from utils.RL_utils import Sampler_base, Sampler_naive, __DEBUG__, REPO_DIR
 
@@ -31,6 +31,8 @@ if __name__ == "__main__":
     parser.add_argument("--conjecture_multiplier", type=int, default=1)
     parser.add_argument("--samples_per_statement", type=int)
     parser.add_argument("--statements_per_round", type=int, default=20000)
+    parser.add_argument("--gpu", type=int, default=4)
+    parser.add_argument("--cpu", type=int, default=24)
     args = parser.parse_args()
     logging.debug(str(args))
     rng = np.random.default_rng(args.seed)
@@ -43,8 +45,8 @@ if __name__ == "__main__":
         os.makedirs(args.exp_dir, exist_ok = True)
 
     formatted_ds = load_ds_from_config(args.dataset_config)
-    if __DEBUG__:
-        formatted_ds = formatted_ds[:1000]
+    #if __DEBUG__:
+     #   formatted_ds = formatted_ds[:1000]
 
     logging.info(f'Number of lemmas to generate: {len(formatted_ds)}')
     if args.statements_per_round > 0:
@@ -69,7 +71,7 @@ if __name__ == "__main__":
         sampler = Sampler()
         sampler.init_lemma_mapping(formatted_ds)
     
-    init_ray_cluster()
+    init_ray_cluster(numcpus=args.cpu,numgpus=args.gpu)
 
     lemmas_to_generate = deepcopy(selected_statements)
     collect_conjecture_fn = lambda inference_pool, nr_actors, selected_lemmas, lemma_mapping, seed: \
@@ -108,6 +110,4 @@ if __name__ == "__main__":
     write_data(json.dumps(sampler.valid_conjecture_examples), os.path.join(args.exp_dir, 'conjecture_examples.json'), 'json')
 
     if not __DEBUG__:
-        logging.debug('Removing temporary files...')
-        execute_on_all_workers(f'rm -r {CHECKPOINT_TMP_DIR}; mkdir -p {CHECKPOINT_TMP_DIR}')
         logging.debug('Done.')
