@@ -107,6 +107,7 @@ if __name__ == "__main__":
     if args.save_dir is None:
         args.save_dir = args.exp_dir
     print(args)
+    logging.info('HELLO 10')
     rng = np.random.default_rng(args.seed)
     round = int(args.exp_dir.rsplit('/', 1)[-1][len('round'):])
 
@@ -118,7 +119,8 @@ if __name__ == "__main__":
     if train_ds is None:
         logging.warning(f"Dataset {args.sft_dataset} contains no data...")
         train_ds = []
-    
+    logging.info('HELLO 9')
+
     if 'gs://' not in args.exp_dir:
         os.makedirs(args.exp_dir, exist_ok = True)
 
@@ -130,20 +132,23 @@ if __name__ == "__main__":
     conjecture_examples = read_file(os.path.join(args.exp_dir, 'conjecture_examples.json'))
     assert generated_proofs is not None, f"Failed to read {os.path.join(args.exp_dir, 'generated_proofs.json')}"
     assert conjecture_examples is not None, f"Failed to read {os.path.join(args.exp_dir, 'conjecture_examples.json')}"
-    
+    logging.info('HELLO 8')
     update_succ_lemmas(generated_proofs, succ_lemmas)
-
+    logging.info('HELLO 7 ')
     all_test_results = defaultdict(list)
     for test_info in generated_proofs:
         key = test_info['statement']
         for _ in range(test_info.get('multiplicity', 1)):
             all_test_results[key].append(test_info.get('complete', False))
     logging.info(f'Number of unique theorems: {len(all_test_results)}')
-    
+    logging.info('HELLO 6')
     valid_proofs = [test_info for test_info in reversed(generated_proofs) if test_info.get('complete', False)]
     # filter out proofs with too high success rate
+    logging.info('HELLO 5')
     valid_proofs = [test_info for test_info in valid_proofs if np.mean(all_test_results[test_info['statement']]) <= 0.5]
+    logging.info('HELLO 4')
     new_ds = format_and_deduplicate_dataset(valid_proofs, train_ds, generated_proofs)
+    logging.info('HELLO 3')
     if len(new_ds) == 0:
         logging.error(f'[Erorr] No new data generated. Exiting...')
         exit(1)
@@ -154,12 +159,15 @@ if __name__ == "__main__":
     logging.info(f'Number of new easy to hard examples: {len(new_ds_conjecture)}')
     train_ds += new_ds_conjecture
 
+    logging.info('HELLO 2')
     execute_on_all_workers("echo 'connection succ'", expect_succ=True) # health check
     wandb_id = ''.join(random.choices(string.ascii_lowercase, k=10))
     wandb_project = "STP_deepseek"
     wandb_run_name = '-'.join(args.exp_dir.split('/')[-2:])
     wandb.init(project=wandb_project, name=wandb_run_name, id=wandb_id, resume="allow")
+    logging.info('Hello 1')
     logging.info(f'Training dataset size = {len(train_ds)}')
+    logging.info('HELLO 000000000000000000000000000')
 
     def compute_metric(data, key):
         return {
@@ -170,8 +178,10 @@ if __name__ == "__main__":
 
     metrics = {}
     metrics |= compute_metric(train_ds, 'combined')
+    logging.info('HELLO 111111111111111111111111111111111111111111111')
+
     metrics |= compute_metric(new_ds + new_ds_conjecture, 'RL_new')
-    
+    logging.info('HELLO 111111112222222222222222222222222222222222')
     nr_unique_statements = len(set(test_info['statement'].split(':', 1)[-1] for test_info in generated_proofs))
     nr_statements = len(set(test_info['statement'] for test_info in generated_proofs))
 
@@ -181,6 +191,8 @@ if __name__ == "__main__":
         'monitoring/unique_invokes_in_Pprime': len(set(test_info['shared_lemma'] for test_info in conjecture_examples)),
         'monitoring/unique_invokes_in_proofs': get_unique_invokes_in_proofs(valid_proofs),
     }
+    logging.info('HELLO 33333333333333333333333333333333333333333333')
+
     wandb.log(metrics)
     logging.info(str(metrics))
     wandb.finish(quiet=True)
@@ -188,10 +200,13 @@ if __name__ == "__main__":
     # save trajectories
     rng.shuffle(train_ds)
     write_data(json.dumps(train_ds), os.path.join(args.save_dir, 'train_ds.json'), 'json', no_compression=True)
-    
+    logging.info('HELLO 444444444444444444444444444444444')
+
     start_time = datetime.now()
     # train the actor
+    
     max_iters = max(len(train_ds) * args.epoch // BATCH_SIZE, 5)
+    logging.info(f'=========================================max_iterations : {max_iters}')
     train_model(os.path.join(args.save_dir, 'RL_model'), args.base_model, max_iters, os.path.join(args.save_dir, 'train_ds.json'), 
                     args, wandb_project, wandb_id)
     duration = datetime.now() - start_time
