@@ -3,6 +3,7 @@ import os
 import json
 import time
 import pickle
+import pandas as pd
 import psutil
 import logging
 from datetime import datetime
@@ -19,11 +20,12 @@ from utils.model_utils import right_truncate, insert_lemma, get_lemma_key, updat
 from utils.model_utils import ray_completion, ray_get_prompt, create_inference_actors, create_embedding_actors, ray_get_embeddings
 from typing import Any, Dict, List, Tuple, Set, Callable, Optional
 from utils.gcloud_utils import read_file, write_data, cleanup_dir, move_file, execute_on_all_workers, copy_dir
-from utils.model_utils import END_THM, START_LEMMA_STMT
+#from utils.model_utils import END_THM, START_LEMMA_STMT
 from utils.prover.lean.verifier import create_ray_lean4_actors, TEST_BATCH_SIZE, DEFAULT_TIMEOUT
 from concurrent.futures import ProcessPoolExecutor
+#from utils.model_utils import copy_checkpoints_all, CHECKPOINT_TMP_DIR, get_lemma_key
 
-BATCH_SIZE = 2048
+BATCH_SIZE = 4
 prompt_length = 1024
 CONJECTURE_THRESHOLD = 0.25
 NR_FOLD = 5
@@ -32,8 +34,8 @@ CPU_PER_TASK = 1.5
 
 __DEBUG__ = os.getenv("DEBUG", 'False').lower() in ('true', '1', 't')
 REPO_DIR = os.path.abspath(os.path.join(__file__, '../../..'))
-STORAGE = os.getenv('STORAGE', None)
-HUGGING_FACE_HUB_TOKEN = os.getenv('HUGGING_FACE_HUB_TOKEN', None)
+STORAGE = "/n/netscratch/amin_lab/Lab/slim/STP/storage"
+HUGGING_FACE_HUB_TOKEN = os.getenv('HF_TOKEN', None)
 WANDB_API_KEY = os.getenv('WANDB_API_KEY', None)
 assert STORAGE is not None, 'STORAGE is not set'
 
@@ -142,9 +144,9 @@ def generate_and_test(
     """
     if ray_inference_actors is not None:
         inference_pool = ActorPool(ray_inference_actors)
-
-    ray_test_actors = create_ray_lean4_actors(reserved_cpus=4, cpus_per_task=cpus_per_task, 
-                                              collect_premises=collect_premises, timeout=DEFAULT_TIMEOUT * test_batch_size)
+    ray_test_actors = create_ray_lean4_actors(reserved_cpus=2, cpus_per_task=4, 
+                                              collect_premises=collect_premises, timeout=60*TEST_BATCH_SIZE)
+    
     tester_pool = ActorPool(ray_test_actors)
 
     save_file_generation = os.path.join(save_dir, f'generated_proofs.json') if save_dir is not None else None
@@ -159,7 +161,7 @@ def generate_and_test(
     finished_generation = False
     
     def aggregate_results(early_stop_threshold = 0):
-        save_interval = 900  # Time interval in seconds (300 seconds = 5 minutes)
+        save_interval = 300  # Time interval in seconds (300 seconds = 5 minutes)
         last_save_time = time.time()
         nr_finished_jobs = 0
         nr_tests_correct = 0
@@ -169,6 +171,7 @@ def generate_and_test(
             if finished_generation and (total_test_tasks - nr_finished_jobs <= early_stop_threshold):
                 break
             if not tester_pool.has_next():
+                print('DEBUG : No tester_pool.has_next ')
                 time.sleep(2)
                 continue
             try:
@@ -184,6 +187,8 @@ def generate_and_test(
                     pbar.refresh()
                 else:
                     time.sleep(2)
+                    print(f'ERROR : {e}')
+                    
                 continue
             
             for result in results:
@@ -198,6 +203,7 @@ def generate_and_test(
                 last_save_time = current_time  # Reset the last save time
 
             cached_pbar_n += len(results)
+            print(f'Hello 3 nr_tests_correct : {nr_tests_correct}/{nr_tests_done}')
             if finished_generation:
                 pbar.update(cached_pbar_n)
                 cached_pbar_n = 0
@@ -252,16 +258,17 @@ def generate_and_test(
         print('Stage 2: rerunning timed-out jobs...')
         for actor in ray_test_actors:
             ray.kill(actor)
-        execute_on_all_workers('killall repl; killall lake')
+        execute_on_all_workers("""pkill -f "repl"; pkill -f "lake" """)
 
         # allow more memory for stage 2 because the failed jobs are likely to be more memory-consuming
-        ray_test_actors = create_ray_lean4_actors(reserved_cpus = 4, cpus_per_task=cpus_per_task_stage2, timeout=DEFAULT_TIMEOUT)
+        ray_test_actors = create_ray_lean4_actors(reserved_cpus = 2, cpus_per_task=cpus_per_task_stage2, timeout=DEFAULT_TIMEOUT)
         tester_pool = ActorPool(ray_test_actors)
 
         new_testing_tasks = []
         for test_info in generated_proofs_dedup:
             if (get_deduplication_key(test_info) not in test_results) or ('complete' not in test_results[get_deduplication_key(test_info)]):
                 new_testing_tasks.append(test_info)
+        print(test_results)
         logging.info(f'Number of lemmas to test in stage 2: {len(new_testing_tasks)}')
         pbar = tqdm(total=len(new_testing_tasks))
         new_testing_tasks = [[test_info] for test_info in new_testing_tasks]
@@ -283,8 +290,8 @@ def generate_and_test(
         
         for actor in ray_test_actors:
             ray.kill(actor)
-        execute_on_all_workers('killall repl; killall lake')
-
+        execute_on_all_workers("""pkill -f "repl"; pkill -f "lake" """)
+        print(test_results)
         # update generated lemmas
         nr_failed = 0
         for test_info in generated_proofs_dedup:
@@ -295,6 +302,9 @@ def generate_and_test(
                 nr_failed += 1
                 test_info['complete'] = False
                 test_info['system_errors'] = 'test failed'
+        print('=============')
+        print(len(generated_proofs_dedup))
+        print(nr_failed)
         assert nr_failed < len(generated_proofs_dedup) * 0.005, f'Failed to test {nr_failed} lemmas'
         write_data(json.dumps(generated_proofs_dedup), save_file_generation, 'json')
     else:
@@ -637,7 +647,6 @@ def wasserstein_matching(P: List[Dict], Q: List[Dict], ray_embedding_actors: Lis
     logging.info(f'Wasserstein matching: #inputs = {N}, #matched = {len(ret)}')
     return ret
 
-from utils.model_utils import copy_checkpoints_all, CHECKPOINT_TMP_DIR, get_lemma_key
 def train_model(
         model_dir: str, 
         train_from: str,
@@ -685,18 +694,18 @@ def train_model(
             'eval_data': eval_data_path,
             'eval_data_cache_dir': os.path.join(data_cache_dir, 'eval')
         }
-
+    print(REPO_DIR)
     LEV_ROOT = os.path.join(REPO_DIR, 'levanter')
-    training_cmd = f'source ~/venv310/bin/activate; mkdir -p ~/.logs/; cd {REPO_DIR}; ray stop; ' \
-                    f'HUGGING_FACE_HUB_TOKEN={HUGGING_FACE_HUB_TOKEN} WANDB_API_KEY={WANDB_API_KEY} PYTHONPATH=${LEV_ROOT}:${LEV_ROOT}/src:${LEV_ROOT}/examples:$PYTHONPATH ' \
-                    'python levanter/examples/weighted_lm.py'
+    training_cmd = f'module load python/3.12.5-fasrc01; module load cuda/12.4.1-fasrc01 ; module load cudnn/9.1.1.17_cuda12-fasrc01 ; conda activate /n/netscratch/amin_lab/Lab/slim/env ;'\
+                    'mkdir -p ~/.logs/; cd /n/netscratch/amin_lab/Lab/slim/STP; ray stop; ' \
+                    '/n/netscratch/amin_lab/Lab/slim/env/bin/python levanter/examples/weighted_lm.py'
     for k, v in training_config.items():
         if v is None:
             training_cmd += f' --{k}'
         else:
             training_cmd += f' --{k} {v}'
     command_hash = hashlib.md5(training_cmd.encode('utf-8')).hexdigest()
-    training_cmd += f' &> ~/.logs/{command_hash}.log'
+ #   training_cmd += f' &> ~/.logs/{command_hash}.log'
     logging.debug(training_cmd)
     execute_on_all_workers(training_cmd, expect_succ=True)
 
@@ -717,10 +726,12 @@ def load_ds_from_config(config_path):
         logging.debug(f'Size of the dataset: {len(raw_dataset)}')
 
         matching_weight = dataset_config.get('weight', 1)
-        for i, raw in enumerate(raw_dataset):
+        for i, raw in enumerate(raw_dataset):            
             test_info = {'statement': raw['formal_statement'].rsplit('sorry', 1)[0].strip(),
                         'label': [raw['split']] + (raw.get('tags', None) or []),
                         'header': raw.get('header', None),
                         'matching_weight': matching_weight}
+
             ret.append(test_info)
+            
     return ret

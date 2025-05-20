@@ -5,17 +5,17 @@ import logging
 import pickle
 import shutil
 from typing import List, Any
-from google.cloud import storage
+#from google.cloud import storage
 from multiprocessing import Pool
 from functools import partial
 import os
-logging.getLogger('google.auth').setLevel(logging.ERROR)
-logging.getLogger('urllib3.connectionpool').setLevel(logging.ERROR)
+#logging.getLogger('google.auth').setLevel(logging.ERROR)
+#logging.getLogger('urllib3.connectionpool').setLevel(logging.ERROR)
 
 from os.path import expanduser
-HOME = expanduser("~")
-TPU_NAME = os.getenv('TPU_NAME')
-ZONE = os.getenv('ZONE')
+# HOME = expanduser("~")
+# TPU_NAME = os.getenv('TPU_NAME')
+# ZONE = os.getenv('ZONE')
 
 ZIP_THREAD = 8
 
@@ -129,8 +129,8 @@ def move_file(source, target):
 
 def execute_on_all_workers(command, expect_succ = False):
     # Execute a command on all workers
-    compute_command = f'gcloud compute tpus tpu-vm ssh {TPU_NAME} --zone {ZONE} --worker=all --command "{command}"'
-    exit_status = os.system(compute_command)
+    #compute_command = f'gcloud compute tpus tpu-vm ssh {TPU_NAME} --zone {ZONE} --worker=all --command "{command}"'
+    exit_status = os.system(command)
     if expect_succ and (exit_status != 0):
         raise ValueError(f"Command failed with exit status {exit_status}")
 
@@ -153,7 +153,7 @@ def copy_dir(source, target):
         os.system(command)
     else:
         # Handle local directory copy
-        shutil.copytree(source, target)
+        shutil.copytree(source, target,dirs_exist_ok=True)
         logging.debug(f"Copied {source} to {target} locally.")
 
 def path_exists(path):

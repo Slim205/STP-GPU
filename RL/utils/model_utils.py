@@ -12,7 +12,8 @@ from ray.util import ActorPool
 from vllm import LLM, SamplingParams
 from transformers import AutoTokenizer
 from typing import Any, Dict, List, Tuple, Callable
-from utils.gcloud_utils import execute_on_all_workers, cleanup_dir, TPU_NAME, ZONE, HOME, read_file, write_data
+#from utils.gcloud_utils import execute_on_all_workers, cleanup_dir, TPU_NAME, ZONE, HOME,
+from utils.gcloud_utils import  read_file, write_data, execute_on_all_workers
 
 START_STATEMENT = '<statement>'
 START_LEMMA_STMT = '<easy theorem>'
@@ -21,7 +22,7 @@ END_THM = '</hard theorem>'
 INVOKED_LEMMA = '<lemma>'
 PROVER_PROMPT = 'Complete the following Lean 4 code:\n\n```lean4\nimport Mathlib\nimport Aesop\nset_option maxHeartbeats 0\nopen BigOperators Real Nat Topology Rat\n'
 
-CHECKPOINT_TMP_DIR = f'{HOME}/ckpt_tmp'
+# CHECKPOINT_TMP_DIR = f'{HOME}/ckpt_tmp'
 __DEBUG__ = os.getenv("DEBUG", 'False').lower() in ('true', '1', 't')
 
 def get_prompt(
@@ -63,7 +64,7 @@ def right_truncate(s, tokenizer, max_tokens):
     return tokenizer.decode(tokens, skip_special_tokens = True)
 
 # Create a class to do batch inference.
-@ray.remote(resources={"TPU": 1})
+@ray.remote(num_gpus=1)
 class LLMPredictor:
     def __init__(self, model, tokenizer, id, debug = False, **kwargs):
         # Create an LLM.
@@ -232,14 +233,14 @@ def ray_get_prompt(
     logging.debug(f"Tokenization complete.")
     return [result["text"] for result in results]
 
-def copy_checkpoints_all(src_dir, dest_dir):
-    if src_dir is None:
-        execute_on_all_workers(f'rm -r {dest_dir}; mkdir -p {dest_dir};')
-        return None
-    else:
-        checkpoint_name = src_dir.rsplit('/', 1)[-1]
-        execute_on_all_workers(f'rm -r {dest_dir}; mkdir -p {dest_dir}; gcloud storage cp -r {src_dir} {dest_dir}')
-        return os.path.join(dest_dir, checkpoint_name)
+# def copy_checkpoints_all(src_dir, dest_dir):
+#     if src_dir is None:
+#         execute_on_all_workers(f'rm -r {dest_dir}; mkdir -p {dest_dir};')
+#         return None
+#     else:
+#         checkpoint_name = src_dir.rsplit('/', 1)[-1]
+#         execute_on_all_workers(f'rm -r {dest_dir}; mkdir -p {dest_dir}; gcloud storage cp -r {src_dir} {dest_dir}')
+#         return os.path.join(dest_dir, checkpoint_name)
 
 def create_inference_actors(
         model_dir: str, 
@@ -247,16 +248,17 @@ def create_inference_actors(
         num_workers: int = None, 
         **kwargs
 ) -> List:
-    execute_on_all_workers(f'rm -r {CHECKPOINT_TMP_DIR}; mkdir -p {CHECKPOINT_TMP_DIR}')
-    if 'gs://' in model_dir:
-        model_dir = copy_checkpoints_all(model_dir, CHECKPOINT_TMP_DIR)
+#    execute_on_all_workers(f'rm -r {CHECKPOINT_TMP_DIR}; mkdir -p {CHECKPOINT_TMP_DIR}')
+
+    # if 'gs://' in model_dir:
+    #     model_dir = copy_checkpoints_all(model_dir, CHECKPOINT_TMP_DIR)
 
     logging.debug('Creating ray actors...')
     if num_workers is None:
-        num_workers = int(ray.cluster_resources()['TPU'])
+        num_workers = int(ray.cluster_resources()['GPU'])
     ray_workers = [LLMPredictor.remote(model_dir, tokenizer_path, id, **kwargs) for id in range(num_workers)]
-    if not __DEBUG__:
-        assert len(ray_workers) > 4, f"Number of workers is {len(ray_workers)}, expected at least 4"
+   # if not __DEBUG__:
+       # assert len(ray_workers) > 4, f"Number of workers is {len(ray_workers)}, expected at least 4"
     # ray.get([actor.get_id.remote() for actor in ray_workers])
     logging.debug(f'Ray inference actors created. Number of workers: {len(ray_workers)}')
     return ray_workers, model_dir
@@ -269,22 +271,27 @@ def create_embedding_actors(
 ) -> List:
     from utils.embedding_utils import EmbeddingWorker
     if num_workers is None:
-        num_workers = int(ray.cluster_resources()['TPU'])
+        num_workers = int(ray.cluster_resources()['GPU'])
     ray_workers = [EmbeddingWorker.remote(model_dir, None, tokenizer_path) for id in range(num_workers)]
     # ray.get([actor.get_id.remote() for actor in ray_workers])
     logging.debug(f'Ray embedding actors created. Number of workers: {len(ray_workers)}')
     return ray_workers
 
-def init_ray_cluster():
-    if __DEBUG__:
-        ray.init(namespace="prover")
-        return
+def init_ray_cluster(numcpus,numgpus):
+    # if __DEBUG__:
+    #     ray.init(namespace="prover")
+    #     return
     
-    compute_command = f'bash ../run_inference.sh'
-    os.system(compute_command)
+    #compute_command = f'bash ../run_inference.sh'
+    #os.system(compute_command)
+
+    os.system("ray stop")
+    os.system(f"ray start --head --port=6379 --num-cpus={numcpus} --num-gpus={numgpus}")
+
     print('Ray cluster initialized.')
     ray.init(namespace="prover")
-    assert int(ray.cluster_resources()['TPU']) > 4, f"TPU count is {ray.cluster_resources()['TPU']}, expected at least 4"
+    print(ray.cluster_resources())
+   # assert int(ray.cluster_resources()['GPU']) > 1, f"CPU count is {ray.cluster_resources()['GPU']}, expected at least 4"
 
 def get_lemma_key(test_info):
     return test_info['statement']
