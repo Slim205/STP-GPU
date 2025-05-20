@@ -43,7 +43,10 @@ if __name__ == "__main__":
 
     if 'gs://' not in args.exp_dir:
         os.makedirs(args.exp_dir, exist_ok = True)
-    formatted_ds = load_ds_from_config(args.dataset_config) 
+
+    formatted_ds = load_ds_from_config(args.dataset_config)
+    #if __DEBUG__:
+     #   formatted_ds = formatted_ds[:1000]
 
     logging.info(f'Number of lemmas to generate: {len(formatted_ds)}')
     if args.statements_per_round > 0:
