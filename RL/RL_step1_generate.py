@@ -39,11 +39,10 @@ if __name__ == "__main__":
 
     if path_exists(os.path.join(args.exp_dir, 'generated_proofs.json')) or path_exists(os.path.join(args.exp_dir, 'generated_proofs.json.gz')):
         logging.warning(f"Dataset already exists. Exiting...")
-        #exit(0)
+        exit(0)
 
     if 'gs://' not in args.exp_dir:
         os.makedirs(args.exp_dir, exist_ok = True)
-    print(args.dataset_config)
     formatted_ds = load_ds_from_config(args.dataset_config) 
 
     logging.info(f'Number of lemmas to generate: {len(formatted_ds)}')
